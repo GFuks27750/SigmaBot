@@ -12,7 +12,7 @@ float calculateRotations(int targetDistance){
   return pulsesPerRotation * rotations; 
 }
 ```
-To make your life easier, you can use this function to count pulses per rotation of the wheel (just manually rotate the wheel at display data on serial monitor: 
+To make your life easier, you can use this function to count pulses per rotation of the wheel (just manually rotate the wheel and display data on serial monitor: 
 
 ```
 void countEncoderA(){
