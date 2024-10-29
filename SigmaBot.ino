@@ -1,9 +1,12 @@
-#define PWMA 10
-#define PWMB 11
-#define AIN1 A3
-#define AIN2 A2
-#define BIN1 A1
-#define BIN2 A0
+
+
+
+#define PWMA 5
+#define PWMB 6
+#define AIN1 A1
+#define AIN2 A0
+#define BIN1 A2
+#define BIN2 A3
 
 #define ENCA 3
 #define ENCB 2
@@ -15,13 +18,13 @@
 #define L 76//skręć w lewo
 #define S 83//zatrzymaj się 
 #define G 71//uruchom silniki kół, nadaj im prędkość i na jaką odległość mają przejechać
-
+#define W 87 //opóźnienie żeby mieć czas postawić robota na ziemię 
 int pos[] = {0,0};
 
 const int wheelCircumference = 3.14 * 6.5;
 int traveledDistance = 0; 
-bool stillRiding = true; 
-bool stillTurning = true; 
+bool stillRiding;
+bool stillTurning;
 
 void setup() {
   Serial.begin(115200);
@@ -42,10 +45,10 @@ void loop() {
   stillRiding = true; 
   stillTurning = true;
   resetData();
-  String input = Serial.readString();
-  int inputLenght = input.length();
-  int command = input.charAt(0);
-  int value = input.substring(1, inputLenght).toInt();
+
+  int command = Serial.read();
+  int value = Serial.parseInt();
+
   Serial.print((char) command);
   Serial.print(" ");
   Serial.print(value);
@@ -54,27 +57,33 @@ void loop() {
   switch(command){
     case F:
     while (stillRiding) {
-      Forward(200, value, 0);
+      Forward(200, value, 1);
     }
     break; 
 
-    case R:
-    while(stillTurning){
-      Right(200,value,1);
-    }
-    break;
     case B: 
     while(stillRiding){
       Backward(200,value,1);
     }
     break;
-    case L: 
-    while(stillRiding){
-      Left(200,value,0);
+    case R:
+    while(stillTurning){
+      Right(value);
     }
+    break;
+
+    case L: 
+    while(stillTurning){
+      Left(value);
+    }
+    break;
+
+    case W:
+    delay(value);
     break;
     }
   }
+  resetData();
 }
 
 void Forward(int targetV, int targetDistance, int encoderNumber){
@@ -95,22 +104,40 @@ void Backward(int targetV, int targetDistance, int encoderNumber){
 
 }
 
-void Right(int targetV, int targetDistance, int encoderNumber) {
+void Right(int targetDistance) {
   targetDistance = angleConvertion(targetDistance);
-  Ride(targetV, targetDistance, encoderNumber);
-  digitalWrite(AIN1, LOW); 
-  digitalWrite(AIN2, HIGH);
-  digitalWrite(BIN1, HIGH);  
-  digitalWrite(BIN2, LOW);
+  if(calculateRotations(targetDistance) >= pos[0]){
+    analogWrite(PWMA, 100);
+    analogWrite(PWMB, 100);
+    digitalWrite(AIN1, LOW); 
+    digitalWrite(AIN2, HIGH);
+    digitalWrite(BIN1, HIGH);  
+    digitalWrite(BIN2, LOW);
+  }
+  else{
+    Stop();
+    stillTurning = false;
+    resetData();
+  }
+
 }
 
-void Left(int targetV, int targetDistance, int encoderNumber){
+void Left(int targetDistance){
   targetDistance = angleConvertion(targetDistance);
-  Ride(targetV, targetDistance, encoderNumber);
+  if(calculateRotations(targetDistance) >= pos[0]){
+  analogWrite(PWMA, 100);
+  analogWrite(PWMB, 100);
   digitalWrite(AIN1, HIGH);
   digitalWrite(AIN2, LOW);
   digitalWrite(BIN2, HIGH);
   digitalWrite(BIN1, LOW);
+  }
+  else{
+    Stop();
+    stillTurning = false;
+    resetData();
+  }
+
 }
 
 void Stop(){
@@ -125,24 +152,17 @@ void Stop(){
 void Ride(int targetV, int targetDistance, int encoderNumber){ //0 -> lewy enkoder, 1 -> prawy enkoder
     // Sprawdzamy, czy przejechano wystarczającą odległość
  if(calculateRotations(targetDistance) >= pos[encoderNumber]){
-    float A = 0.5; 
+    float A = 30; 
     int Lp = pos[0];
     int Ll = pos[1];
-    int Vp = targetV - A * (Lp - Ll);
-    int Vl = targetV + A * (Lp - Ll);
+    int Vp = targetV + A * (Lp - Ll);
+    int Vl = targetV - A * (Lp - Ll);
     analogWrite(PWMA, Vp);
     analogWrite(PWMB, Vl);
-
-    // Zapewniamy, że prędkość nie przekracza wartości docelowej
-    if(Vp > targetV || Vl > targetV){
-      analogWrite(PWMA, targetV);
-      analogWrite(PWMB, targetV);
-    }
   }
   else{
     Stop();
     stillRiding = false; 
-    stillTurning = false;
   }
 
 }
@@ -154,56 +174,38 @@ void resetData(){
 }
 
 float calculateRotations(int targetDistance){
-  float pulsesPerRotation = 1200;
+  float pulsesPerRotation = 20;
   float rotations = (float)targetDistance / wheelCircumference; 
-  return pulsesPerRotation * rotations; 
+  return abs(pulsesPerRotation * rotations); 
 }
 
 void countEncoderA(){
   int a = digitalRead(ENCA);
   if(a>0){
-    pos[0]++;
-  }
-  else{
-    pos[0]--;
-  }
-}
-void countEncoderB(){
-  int b = digitalRead(ENCB);
-  if(b>0){
     pos[1]++;
   }
   else{
     pos[1]--;
   }
 }
+void countEncoderB(){
+  int b = digitalRead(ENCB);
+  if(b>0){
+    pos[0]++;
+  }
+  else{
+    pos[0]--;
+  }
+}
 
 int angleConvertion(int angle){
   switch(angle){
     case 45:
-      angle = 6;
+      angle = 4;
     break;
     case 90:
-      angle = 13;
-    break;
-    case 135:
-      angle = 19;
-    break;
-    case 180:
-      angle = 25;
-    break;
-    case 225:
-      angle = 31;
-    break;
-    case 270:
-      angle = 37;
-    break;
-    case 315:
-      angle = 43;
-    break;
-    case 360:
-      angle = 49;
-    break;
+      angle = 9;
+
   }
   return angle; 
 }
